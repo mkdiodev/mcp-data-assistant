@@ -16,7 +16,7 @@ from backend.core.config import settings
 from backend.core.logger import log
 from backend.mcp.server import mcp
 from backend.mcp.tools.file_tool import list_data_files, read_excel_csv, get_file_columns
-from backend.mcp.tools.db_tool import query_sql, list_tables, get_table_info
+from backend.mcp.tools.db_tool import query_sql, list_tables, get_table_info, search_columns
 
 # Tool registry mapping tool names to their functions and metadata
 TOOL_REGISTRY = {
@@ -49,7 +49,7 @@ TOOL_REGISTRY = {
     },
     "query_sql": {
         "func": query_sql,
-        "description": "Execute a SQL SELECT query",
+        "description": "Execute a SQL SELECT query (TQSL Protocol: Step 3 - Run after checking tables and schema)",
         "parameters": {
             "properties": {
                 "query": {"type": "string", "description": "SQL SELECT query"},
@@ -60,17 +60,28 @@ TOOL_REGISTRY = {
     },
     "list_tables": {
         "func": list_tables,
-        "description": "List all tables in the database",
+        "description": "List all tables in the database with row counts (TQSL Protocol: Step 1 - Always check first)",
         "parameters": {"properties": {}},
     },
     "get_table_info": {
         "func": get_table_info,
-        "description": "Get schema information for a table",
+        "description": "Get schema information for a table including column types and primary keys (TQSL Protocol: Step 2)",
         "parameters": {
             "properties": {
                 "table_name": {"type": "string", "description": "Name of the table"},
             },
             "required": ["table_name"],
+        },
+    },
+    "search_columns": {
+        "func": search_columns,
+        "description": "Search for columns by name pattern across tables (TQSL Protocol: Discovery tool)",
+        "parameters": {
+            "properties": {
+                "column_pattern": {"type": "string", "description": "Column name pattern to search for"},
+                "table_pattern": {"type": "string", "description": "Optional table name pattern to filter"},
+            },
+            "required": ["column_pattern"],
         },
     },
 }
@@ -205,10 +216,23 @@ async def chat(request: ChatRequest):
                     "- read_excel_csv: Read an Excel or CSV file (args: filename, sheet_name, nrows)\n"
                     "- get_file_columns: Get column info from a file (args: filename)\n"
                     "- query_sql: Execute a SQL SELECT query (args: query, max_rows)\n"
-                    "- list_tables: List all tables in the database\n"
-                    "- get_table_info: Get schema info for a table (args: table_name)\n\n"
-                    "Use these tools when the user asks about data, files, or database content. "
-                    "Always explain your findings in a friendly and helpful manner."
+                    "- list_tables: List all tables in the database with row counts\n"
+                    "- get_table_info: Get schema info for a table (args: table_name)\n"
+                    "- search_columns: Search for columns by name pattern (args: column_pattern, table_pattern)\n\n"
+                    "**THINK-FIRST PROTOCOL FOR DATABASE QUERIES (TQSL)**\n"
+                    "When handling database-related questions, you MUST follow this protocol:\n"
+                    "1. **THINK - CHECK TABLES FIRST** - Use `list_tables` to see available tables\n"
+                    "2. **THINK - CHECK SCHEMA** - Use `get_table_info(table_name)` to verify column names, types, primary keys, and structure\n"
+                    "3. **QUERY - RUN QUERY** - Only after confirming tables and schema, use `query_sql` to execute the query\n"
+                    "4. **SQL SERVER - RESPOND** - Format and explain results clearly\n\n"
+                    "**IMPORTANT RULES:**\n"
+                    "- NEVER guess table names or column names without checking first\n"
+                    "- NEVER assume database structure - always verify with get_table_info before writing SQL\n"
+                    "- If user asks about unknown data, use `search_columns` to find relevant columns\n"
+                    "- If a requested table or column does not exist, inform the user instead of guessing alternatives\n"
+                    "- For file-related questions, check available files first with list_data_files before reading\n"
+                    "- Always explain your findings in a friendly and helpful manner\n"
+                    "- When constructing SQL queries, use the exact table and column names from get_table_info"
                 ),
             }
         ]
@@ -266,23 +290,8 @@ async def chat(request: ChatRequest):
             {
                 "type": "function",
                 "function": {
-                    "name": "query_sql",
-                    "description": "Execute a SQL SELECT query",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "SQL SELECT query"},
-                            "max_rows": {"type": "integer", "description": "Maximum rows to return"},
-                        },
-                        "required": ["query"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
                     "name": "list_tables",
-                    "description": "List all tables in the database",
+                    "description": "TQSL Step 1: List all tables in the database with row counts. ALWAYS call this first before any SQL query.",
                     "parameters": {
                         "type": "object",
                         "properties": {},
@@ -293,13 +302,43 @@ async def chat(request: ChatRequest):
                 "type": "function",
                 "function": {
                     "name": "get_table_info",
-                    "description": "Get schema information for a table",
+                    "description": "TQSL Step 2: Get schema information for a table. ALWAYS call this before query_sql to verify columns.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "table_name": {"type": "string", "description": "Name of the table"},
                         },
                         "required": ["table_name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_columns",
+                    "description": "TQSL Discovery: Search for columns by name pattern across tables. Use when user asks about data you haven't seen.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "column_pattern": {"type": "string", "description": "Column name pattern to search for"},
+                            "table_pattern": {"type": "string", "description": "Optional table name pattern to filter"},
+                        },
+                        "required": ["column_pattern"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "query_sql",
+                    "description": "TQSL Step 3: Execute a SQL SELECT query. ONLY call after list_tables and get_table_info confirm the schema.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "SQL SELECT query"},
+                            "max_rows": {"type": "integer", "description": "Maximum rows to return"},
+                        },
+                        "required": ["query"],
                     },
                 },
             },
