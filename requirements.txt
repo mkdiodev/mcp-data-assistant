@@ -1,0 +1,39 @@
+# ============================================
+# MCP Data Assistant - All Dependencies
+# ============================================
+# Install with: pip install -r requirements.txt
+# Or with uv:   uv pip install -r requirements.txt
+# ============================================
+
+# --- FastAPI & Server ---
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# --- MCP (Model Context Protocol) ---
+fastmcp>=0.1.0
+mcp>=1.0.0
+
+# --- AI Client (LM Studio via OpenAI-compatible API) ---
+openai>=1.12.0
+
+# --- Database ---
+pyodbc>=5.1.0
+
+# --- File Processing ---
+pandas>=2.2.0
+openpyxl>=3.1.2
+
+# --- Environment & Config ---
+python-dotenv>=1.0.0
+pydantic>=2.6.0
+pydantic-settings>=2.1.0
+
+# --- Logging ---
+loguru>=0.7.0
+
+# --- HTTP Client ---
+httpx>=0.27.0
+
+# --- Frontend (Streamlit) ---
+streamlit>=1.31.0
+streamlit-extras>=0.4.0
