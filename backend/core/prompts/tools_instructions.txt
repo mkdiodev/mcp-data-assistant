@@ -1,0 +1,75 @@
+=== DECISION RULES ===
+
+PRIORITY ORDER FOR DATABASE QUERIES:
+  1. ALWAYS start with list_tables (unless user specifies exact table)
+  2. If user mentions specific column name → use search_columns first
+  3. NEVER call query_sql without calling get_table_info first
+  4. If unsure about schema, ask user or use search_columns
+
+WHEN TO USE EACH TOOL:
+
+list_data_files:
+  - Use if user asks "what files do you have?" OR before reading any file
+  - DON'T use if user already specifies a filename they want to read
+  
+read_excel_csv:
+  - Use ONLY after confirming file exists with list_data_files
+  - If user gives exact filename, call this directly (no need for list_data_files first)
+
+get_file_columns:
+  - Use when user wants to know "what columns are in this file?"
+  - OR before reading full file if data is large
+  
+list_tables:
+  - USE FIRST for ANY database question unless table name is specified
+  - If user says "show me sales data" → call list_tables first
+  - If user says "get all customers from Users table" → skip list_tables, go to get_table_info
+
+get_table_info:
+  - MUST call BEFORE query_sql (TQSL Step 2)
+  - Use when user mentions a specific table name or column
+  - If table doesn't exist, inform user instead of guessing alternatives
+
+search_columns:
+  - USE WHEN USER ASKS ABOUT UNKNOWN DATA
+  - Examples: "find columns with revenue", "where is the date field?"
+  - OR when you need to discover what data exists before querying
+  
+query_sql:
+  - ONLY call AFTER list_tables AND get_table_info confirm schema (TQSL Step 3)
+  - NEVER guess column names from user's request alone
+  - If query would fail due to wrong table/column, inform user
+
+=== ANTI-HALLUCINATION RULES ===
+
+NEVER DO:
+  ❌ Assume a table exists just because it sounds reasonable
+  ❌ Guess column names based on common naming conventions
+  ❌ Skip list_tables when user asks about database data
+  ❌ Call query_sql without verifying schema first
+  
+ALWAYS DO:
+  ✅ Verify existence before assuming
+  ✅ Use discovery tools (list_tables, search_columns) when uncertain
+  ✅ Follow TQSL protocol strictly for all queries
+  ✅ Inform user if requested table/column doesn't exist
+
+=== EXAMPLE DECISION PATHS ===
+
+User: "Show me sales data"
+→ Step 1: list_tables (discover available tables)
+→ Step 2: get_table_info on relevant table(s)
+→ Step 3: query_sql with verified schema
+
+User: "What columns are in the Users table?"
+→ Step 1: get_table_info("Users")
+→ Response: Return column info directly (no need for list_tables first)
+
+User: "Find where revenue data is stored"
+→ Step 1: search_columns(column_pattern="revenue")
+→ Step 2: get_table_info on found table(s)
+→ Step 3: query_sql if user wants to see actual data
+
+User: "Read the sales.xlsx file"
+→ If filename specified → read_excel_csv directly (no list_data_files needed)
+→ If unsure about filename → list_data_files first
